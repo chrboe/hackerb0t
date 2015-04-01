@@ -1,17 +1,17 @@
-#define _WIN32_WINNT 0x0501
 
-#include <winsock2.h>
 #include <stdio.h>
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-#include "token.h"
 #include "array.h"
 #include "socket.h"
 #include "irc.h"
+#include "cJSON.h"
+#include "openssl/ssl.h"
+
 
 #define HOST "irc.twitch.tv"
 #define PORT "6667"
 
+char* token;
+int token_len;
 char* get_value(array_t* arr, char* key)
 {
     if(!arr) return NULL;
@@ -86,6 +86,146 @@ void process_line(SOCKET socket, char* msg)
             else
                 send_irc_message(socket, "!saymyname doesn't accept any parameters", username);
         }
+        else if(strcmp(bot_command, "!twitchapi") == 0)
+        {
+            char* request_format = "GET /kraken HTTP/1.1\r\nConnection: close\r\nHost: api.twitch.tv\r\nAccept: application/vnd.twitchtv.v3+json\r\nAuthorization: OAuth %s\r\n\r\n";
+            int request_format_len = strlen(request_format) -2;
+            char* request = calloc(request_format_len + token_len + 1, sizeof(char));
+            sprintf(request, request_format, token);
+            SOCKET api_sock = get_connect_socket("api.twitch.tv", "443");
+
+            SSL_load_error_strings();
+            SSL_library_init();
+            SSL_CTX* ssl_ctx = SSL_CTX_new(SSLv23_client_method());
+            SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, NULL);
+
+            SSL* conn = SSL_new(ssl_ctx);
+            SSL_set_connect_state(conn);
+            SSL_connect(conn);
+            SSL_set_verify(conn, SSL_VERIFY_NONE, NULL);
+
+            long l = 0;
+            ioctlsocket(api_sock, FIONBIO, &l);
+
+            //SSL_set_fd(conn, api_sock);
+            BIO *sbio = NULL;
+            sbio = BIO_new_socket(api_sock, BIO_NOCLOSE);
+            SSL_set_bio(conn, sbio, sbio);
+
+
+            int send_len = strlen(request);
+
+            int total = 0;        // how many bytes we've sent
+            int bytesleft = send_len; // how many we have left to send
+            int res;
+
+            //printf("sending %s\n",request);
+            char* request_m = calloc(send_len+1, sizeof(char));
+            memcpy(request_m, request, send_len);
+            res = SSL_write(conn, request_m, bytesleft);
+            if (res < 0)
+            {
+                char errorstr[512];
+                int error = SSL_get_error(conn, res);
+                printf("send failed with error: ");
+                switch(error)
+                {
+                case SSL_ERROR_NONE:
+                    printf("SSL_ERROR_NONE (what?)\n");
+                    break;
+                case SSL_ERROR_ZERO_RETURN:
+                    printf("SSL_ERROR_ZERO_RETURN\n");
+                    break;
+                case SSL_ERROR_WANT_READ:
+                    printf("SSL_ERROR_WANT_READ\n");
+                    break;
+                case SSL_ERROR_WANT_WRITE:
+                    printf("SSL_ERROR_WANT_WRITE\n");
+                    break;
+                case SSL_ERROR_WANT_CONNECT:
+                    printf("SSL_ERROR_WANT_CONNECT\n");
+                    break;
+                case SSL_ERROR_WANT_ACCEPT:
+                    printf("SSL_ERROR_WANT_ACCEPT\n");
+                    break;
+                case SSL_ERROR_WANT_X509_LOOKUP:
+                    printf("SSL_ERROR_WANT_X509_LOOKUP\n");
+                    break;
+                case SSL_ERROR_SYSCALL:
+                    printf("SSL_ERROR_SYSCALL\n");
+                    break;
+                case SSL_ERROR_SSL:
+                    printf("SSL_ERROR_SSL\n");
+                    break;
+                }
+                printf("(%s)\n", ERR_error_string(ERR_get_error(), NULL));
+                closesocket(api_sock);
+                WSACleanup();
+                return 1;
+            }
+            free(request_m);
+
+            printf("sending finished\n");
+
+            int result = 0;
+            char* buf = calloc(512, sizeof(char));
+            int recvbuflen = 512;
+            char* fullbuf = NULL;
+            int fullbufsize = 0;
+            do
+            {
+                printf("reading\n");
+                result = SSL_read(conn, buf, recvbuflen);
+                if(result < 0)
+                {
+                    char errorstr[512];
+                    int error = SSL_get_error(conn, res);
+                    printf("ssl recv failed with error: ");
+                    switch(error)
+                    {
+                    case SSL_ERROR_NONE:
+                        printf("SSL_ERROR_NONE (what?)\n");
+                        break;
+                    case SSL_ERROR_ZERO_RETURN:
+                        printf("SSL_ERROR_ZERO_RETURN\n");
+                        break;
+                    case SSL_ERROR_WANT_READ:
+                        printf("SSL_ERROR_WANT_READ\n");
+                        break;
+                    case SSL_ERROR_WANT_WRITE:
+                        printf("SSL_ERROR_WANT_WRITE\n");
+                        break;
+                    case SSL_ERROR_WANT_CONNECT:
+                        printf("SSL_ERROR_WANT_CONNECT\n");
+                        break;
+                    case SSL_ERROR_WANT_ACCEPT:
+                        printf("SSL_ERROR_WANT_ACCEPT\n");
+                        break;
+                    case SSL_ERROR_WANT_X509_LOOKUP:
+                        printf("SSL_ERROR_WANT_X509_LOOKUP\n");
+                        break;
+                    case SSL_ERROR_SYSCALL:
+                        printf("SSL_ERROR_SYSCALL\n");
+                        break;
+                    case SSL_ERROR_SSL:
+                        printf("SSL_ERROR_SSL\n");
+                        break;
+                    }
+                }
+                fullbuf = realloc(fullbuf, fullbufsize + result);
+                memcpy(fullbuf + fullbufsize, buf, result);
+                fullbufsize += result;
+            } while(result > 0);
+            fullbuf = realloc(fullbuf, fullbufsize +1);
+            fullbuf[fullbufsize] = '\0';
+            printf("received from api: %s\n", fullbuf);
+
+            free(buf);
+            SSL_shutdown(conn);
+            SSL_free(conn);
+            closesocket(api_sock);
+
+        }
         else if(strcmp(bot_command, "!suggest") == 0)
         {
             if(strcmp(usertype, "mod") != 0 && strcmp(channel+1, username) != 0)
@@ -94,10 +234,8 @@ void process_line(SOCKET socket, char* msg)
             }
             else
             {
-                //printf("suggest\n");
                 if(params.used == 0)
                 {
-                    //printf("suggest usage\n");
                     send_irc_message(socket, "Usage: !suggest [suggestion]", username);
                 }
                 else
@@ -157,55 +295,11 @@ int main(int argc, char** argv)
     if(res != 0)
     {
         printf("there was an error initializing winsock: %d\n", WSAGetLastError());
-        return 1;
+        return INVALID_SOCKET;
     }
 
-    struct addrinfo* result = NULL;
-    struct addrinfo* ptr = NULL;
-    struct addrinfo hints;
-    SOCKET connect_socket = INVALID_SOCKET;
+    SOCKET connect_socket = get_connect_socket(HOST, PORT);
 
-    ZeroMemory( &hints, sizeof(hints) );
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    res = getaddrinfo(HOST, PORT, &hints, &result);
-    if(res != 0)
-    {
-        printf("there was an error resolving the address: %d\n", WSAGetLastError());
-        return 1;
-    }
-
-    for(ptr=result; ptr != NULL ;ptr=ptr->ai_next)
-    {
-        connect_socket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-        if (connect_socket == INVALID_SOCKET)
-        {
-            printf("socket failed with error: %d\n", WSAGetLastError());
-            WSACleanup();
-            return 1;
-        }
-        res = connect( connect_socket, ptr->ai_addr, (int)ptr->ai_addrlen);
-        if (res == SOCKET_ERROR)
-        {
-            closesocket(connect_socket);
-            connect_socket = INVALID_SOCKET;
-            continue;
-        }
-        break;
-    }
-
-    freeaddrinfo(result);
-
-    if (connect_socket == INVALID_SOCKET)
-    {
-        printf("Unable to connect to server!\n");
-        WSACleanup();
-        return 1;
-    }
-
-    char* token;
     long input_file_size;
 
     FILE* f = fopen("token.txt", "r");
@@ -217,25 +311,28 @@ int main(int argc, char** argv)
     fread(token, sizeof(char), input_file_size, f);
     fclose(f);
     token[input_file_size] = 0;
+    token_len = input_file_size;
 
-    char* pass_buf_format = "PASS %s\r\nNICK HackerB0t\r\nJOIN #hackerc0w\r\nCAP REQ :twitch.tv/tags\r\n";
+    char* pass_buf_format = "PASS oauth:%s\r\nNICK HackerB0t\r\nJOIN #hackerc0w\r\nCAP REQ :twitch.tv/tags\r\n";
     int formatlen = strlen(pass_buf_format)-2;
 
     int buflen = formatlen + input_file_size;
     char* pass_buf = calloc(buflen, sizeof(char));
     sprintf(pass_buf, pass_buf_format, token);
-    printf("auth: %s\n", pass_buf);
+    //printf("auth: %s\n", pass_buf);
     // authentication
     send_msg(connect_socket, pass_buf, &buflen);
 
     int recvlen = 0;
     while(1)
     {
-        char* recv_buf = recv_msg(connect_socket, &recvlen);
+        char* recv_buf = recv_irc_msg(connect_socket, &recvlen);
+        if(!recv_buf) break;
         handle_irc(connect_socket, recv_buf, recvlen);
         free(recv_buf);
     }
     closesocket(connect_socket);
+    free(token);
 
     return 0;
 }

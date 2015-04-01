@@ -205,9 +205,26 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    char* pass_buf = "PASS " AUTH_TOKEN "\r\nNICK HackerB0t\r\nJOIN #hackerc0w\r\nCAP REQ :twitch.tv/tags\r\n";
-    int buflen = strlen(pass_buf);
+    char* token;
+    long input_file_size;
 
+    FILE* f = fopen("token.txt", "r");
+    fseek(f, 0, SEEK_END);
+    input_file_size = ftell(f);
+    rewind(f);
+
+    token = calloc((input_file_size + 1), (sizeof(char)));
+    fread(token, sizeof(char), input_file_size, f);
+    fclose(f);
+    token[input_file_size] = 0;
+
+    char* pass_buf_format = "PASS %s\r\nNICK HackerB0t\r\nJOIN #hackerc0w\r\nCAP REQ :twitch.tv/tags\r\n";
+    int formatlen = strlen(pass_buf_format)-2;
+
+    int buflen = formatlen + input_file_size;
+    char* pass_buf = calloc(buflen, sizeof(char));
+    sprintf(pass_buf, pass_buf_format, token);
+    printf("auth: %s\n", pass_buf);
     // authentication
     send_msg(connect_socket, pass_buf, &buflen);
 

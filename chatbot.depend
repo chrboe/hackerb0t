@@ -1,0 +1,32 @@
+# depslib dependency file v1.0
+1427876795 source:j:\projects\chatbot\chatbot\main.c
+	<winsock2.h>
+	<stdio.h>
+	<WinSock2.h>
+	<WS2tcpip.h>
+	"token.h"
+	"array.h"
+	"socket.h"
+	"irc.h"
+
+1427874343 source:j:\projects\chatbot\chatbot\socket.c
+	"socket.h"
+
+1427766227 j:\projects\chatbot\chatbot\token.h
+
+1427853160 source:j:\projects\chatbot\chatbot\array.c
+	"array.h"
+
+1427843173 j:\projects\chatbot\chatbot\array.h
+	<stdlib.h>
+
+1427876724 source:j:\projects\chatbot\chatbot\irc.c
+	"irc.h"
+
+1427874325 j:\projects\chatbot\chatbot\irc.h
+	"array.h"
+	"socket.h"
+
+1427874436 j:\projects\chatbot\chatbot\socket.h
+	<winsock2.h>
+

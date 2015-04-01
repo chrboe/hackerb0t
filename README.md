@@ -1,2 +1,4 @@
 # hackerb0t
-A Twitch IRC Chatbot, written in C. Uses no external libraries except winsock and libc.
+A Twitch IRC Chatbot, written in C, without an IRC library.
+
+uses cJSON for JSON parsing (Copyright (c) 2009 Dave Gamble)

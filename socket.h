@@ -6,6 +6,7 @@
 #include <winsock2.h>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
+#include "openssl/ssl.h"
 
 /*
     max length for an IRC message is defined

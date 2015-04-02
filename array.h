@@ -2,6 +2,7 @@
 #define ARRAY_H_INCLUDED
 
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct {
   char** array;

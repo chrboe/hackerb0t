@@ -15,6 +15,7 @@ void insert_array(array_t *a, char* element)
         a->array = realloc(a->array, a->size * sizeof(char*));
     }
     int element_size = strlen(element);
+    free(a->array[a->used]);
     a->array[a->used] = malloc(element_size +1);
     memcpy(a->array[a->used], element, (element_size +1));
     a->used++;
@@ -22,7 +23,9 @@ void insert_array(array_t *a, char* element)
 
 void free_array(array_t *a)
 {
-  free(a->array);
-  a->array = NULL;
-  a->used = a->size = 0;
+    for(int i = 0; i < a->used; i++)
+        free(a->array[i]);
+    free(a->array);
+    a->array = NULL;
+    a->used = a->size = 0;
 }

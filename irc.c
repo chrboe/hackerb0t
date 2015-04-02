@@ -57,7 +57,7 @@ char* fetch_complete_line(char** msg, size_t* msg_len, size_t* line_len)
     char* remaining_buf = calloc((*msg_len) - len, sizeof(char));
     memcpy(remaining_buf, *msg + len, (*msg_len) - len);
 
-    int linelength_remaining = irc_msg_len(remaining_buf, (*msg_len) - len);
+    int linelength_remaining = irc_msg_len(remaining_buf, (*msg_len) - len-1);
 
     if(linelength_remaining == -1)
     {
@@ -100,7 +100,7 @@ int parse_tags(char* tags, array_t* arr)
         {
             current = realloc(current, current_size +1);
             current[current_size] = '\0';
-            insert_array(arr, strdup(current));
+            insert_array(arr, current);
             free(current);
             current = NULL;
             current_size = 0;
@@ -123,7 +123,7 @@ int parse_tags(char* tags, array_t* arr)
     }
     current = realloc(current, current_size +1);
     current[current_size] = '\0';
-    insert_array(arr, strdup(current));
+    insert_array(arr, current);
     free(current);
     current = NULL;
     current_size = 0;
@@ -139,6 +139,7 @@ void send_irc_message(SOCKET socket, char* msg, char* username)
     char* msgtosend = calloc(sendlen, sizeof(char));
     sprintf(msgtosend, wrapper, username, msg);
     send_msg(socket, msgtosend, &sendlen);
+    free(msgtosend);
 }
 
 void handle_irc(SOCKET socket, char* msg, int recvlen)

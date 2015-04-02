@@ -7,21 +7,20 @@ char* recv_irc_msg(SOCKET s, int* received)
     int res;
     char* recvbuf = calloc(BUFLEN, sizeof(char));
     int recvbuflen = BUFLEN;
-
     res = recv(s, recvbuf, recvbuflen, 0);
-    if (res > 0)
+    if(res<0)
     {
-
-        //printf("Bytes received: %d\n", res);
-        *received = res;
-        //printf("%s\n", recvbuf);
-
-        return recvbuf;
+        printf("recv irc failed with error: %d\n", WSAGetLastError());
+        WSACleanup();
+        return NULL;
     }
 
-    printf("recv irc failed with error: %d\n", WSAGetLastError());
-    WSACleanup();
-    return NULL;
+    //printf("Bytes received: %d\n", res);
+    *received = res;
+    //printf("%s\n", recvbuf);
+
+    return recvbuf;
+
 }
 
 char* recv_msg(SOCKET s)
@@ -65,13 +64,12 @@ int send_msg(SOCKET s, char *buf, int *len)
 {
     int total = 0;        // how many bytes we've sent
     int bytesleft = *len; // how many we have left to send
-    int n;
-    int res;
+    int n = 0;
 
     while(total < *len) {
         //printf("sending %s\n",buf+total);
         n = send(s, buf+total, bytesleft, 0);
-        if (res == SOCKET_ERROR)
+        if (n == SOCKET_ERROR)
         {
             printf("send failed with error: %d\n", WSAGetLastError());
             closesocket(s);

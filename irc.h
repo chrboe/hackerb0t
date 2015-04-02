@@ -10,4 +10,5 @@ int parse_tags(char* tags, array_t* arr);
 void send_irc_message(SOCKET socket, char* msg, char* username);
 void handle_irc(SOCKET socket, char* msg, int recvlen);
 
+
 #endif // IRC_H_INCLUDED

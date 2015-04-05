@@ -1,11 +1,7 @@
 #include "bot.h"
 
-
 #define HOST "irc.twitch.tv"
 #define PORT "6667"
-
-char* token;
-int token_len;
 
 char* get_value(array_t* arr, char* key)
 {
@@ -20,20 +16,23 @@ char* get_value(array_t* arr, char* key)
     }
 }
 
-void read_token_from_file()
+char* read_token_from_file(char* file)
 {
     long input_file_size;
 
-    FILE* f = fopen("token.txt", "r");
+    FILE* f = fopen(file, "r");
+
+    if(!f) return NULL;
+
     fseek(f, 0, SEEK_END);
     input_file_size = ftell(f);
     rewind(f);
 
-    token = calloc((input_file_size + 1), (sizeof(char)));
+    char* token = calloc((input_file_size + 1), (sizeof(char)));
     fread(token, sizeof(char), input_file_size, f);
     fclose(f);
     token[input_file_size] = 0;
-    token_len = input_file_size;
+    return token;
 }
 
 
@@ -54,17 +53,27 @@ int main(int argc, char** argv)
     }
     SOCKET connect_socket = get_connect_socket(HOST, PORT);
 
-    read_token_from_file();
-    if(!token)
+    char* l_twitch_token = read_token_from_file("twitch.token");
+    char* l_spotify_token = read_token_from_file("spotify.token");
+
+    if(!l_twitch_token)
     {
-        printf("Your authentification token could not be read.\nMake sure there is a file called \"token.txt\" with the token in it\n");
+        printf("Your Twitch authentification token could not be read.\nMake sure there is a file called \"twitch.token\" with the token in it\n");
         return 1;
     }
-    //printf("token: %s\n", token);
-    start_bot(connect_socket, token);
+    if(!l_spotify_token)
+    {
+        printf("Your Spotify authentification token could not be read.\nMake sure there is a file called \"spotify.token\" with the token in it\n");
+        return 1;
+    }
+
+    register_commands();
+
+    hackerbot_start_bot(connect_socket, l_twitch_token, l_spotify_token);
 
     closesocket(connect_socket);
-    free(token);
+    free(l_twitch_token);
+    free(l_spotify_token);
 
     return 0;
 }

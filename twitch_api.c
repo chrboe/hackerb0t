@@ -1,94 +1,15 @@
 #include "twitch_api.h"
 
-char* strtok_single (char * str, char const * delims)
+
+cJSON* send_twitch_api_request(char* url, char* token)
 {
-  static char  * src = NULL;
+    char* request_format = "GET %s HTTP/1.1\r\nConnection: close\r\nHost: api.twitch.tv\r\nAccept: application/vnd.twitchtv.v3+json\r\nAuthorization: OAuth %s\r\n\r\n";
+    int request_format_len = strlen(request_format) - 2 - 2; // one -2 for every %s
+    int token_len = strlen(token);
+    int url_len = strlen(url);
+    char* request = calloc(request_format_len + url_len + token_len + 1, sizeof(char));
+    sprintf(request, request_format, url, token);
 
-  char  *  p,  * ret = 0;
-
-  if (str != NULL)
-    src = str;
-
-  if (src == NULL)
-    return NULL;
-
-
-  if ((p = strpbrk (src, delims)) != NULL) {
-    *p  = 0;
-    ret = src;
-    src = ++p;
-  }
-
-  return ret;
-}
-
-static char* strip_chunked(char* buffer)
-{
-    char* dup_buffer = strdup(buffer);
-    char* body = strstr(dup_buffer, "\r\n\r\n")+4;
-    free(buffer);
-    int result_len = body-dup_buffer;
-    char* result_buffer = calloc(result_len, sizeof(char));
-    memcpy(result_buffer, dup_buffer, result_len);
-
-    char* line = strtok(body, "");
-    int found = 0;
-    int firsttime = 1;
-    char* temp_line = NULL;
-    while(line = strtok(firsttime ? body : NULL, "\r\n"))
-    {
-        int line_len = strlen(line);
-        firsttime = 0;
-        found=0;
-        for(int i = 0;i<line_len;i++)
-        {
-            if(!(isxdigit(line[i]) || line[i]=='\r' || line[i]=='\n'))
-            {
-                found=0;
-                break;
-            }
-            else
-                found=1;
-        }
-        if(found)
-        {
-            int len = strtol(line, NULL, 16);
-            //printf("next chunk length: %d\n", len);
-            if(len > 0)
-            {
-                result_buffer = realloc(result_buffer, result_len+len+2);
-                memcpy(result_buffer + result_len, dup_buffer + result_len + line_len + 2, len+2); // +2 because \r\n
-                result_len += len + 2;
-            }
-        }
-    }
-    free(dup_buffer);
-
-    result_buffer = realloc(result_buffer, result_len + 2);
-    result_buffer[result_len] = '\0';
-    return result_buffer;
-}
-
-int check_for_chunked(char** buffer)
-{
-    char* key = "Transfer-Encoding: chunked";
-    char* temp_buf = strdup(*buffer);
-    char* body = strstr(temp_buf, "\r\n\r\n");
-    int header_len = body - temp_buf;
-    temp_buf[header_len] = '\0';
-    char* header_line = strtok(temp_buf, "\r\n");
-    while(header_line = strtok(NULL, "\r\n"))
-    {
-        if(strncmp(header_line, key, strlen(key)) == 0)
-            break;
-    }
-    free(temp_buf);
-    int res = header_line != NULL;
-    return res;
-}
-
-void send_twitch_api_request(char* request, char** buffer)
-{
     SOCKET api_sock = get_connect_socket("api.twitch.tv", "443");
 
     SSL_load_error_strings();
@@ -161,6 +82,7 @@ void send_twitch_api_request(char* request, char** buffer)
         return 1;
     }
     free(request_m);
+    free(request);
 
     //printf("sending finished\n");
 
@@ -168,7 +90,7 @@ void send_twitch_api_request(char* request, char** buffer)
     char* buf = calloc(512, sizeof(char));
     int recvbuflen = 512;
     int fullbufsize = 0;
-    *buffer = NULL;
+    char* buffer = NULL;
     do
     {
         //printf("reading\n");
@@ -209,22 +131,23 @@ void send_twitch_api_request(char* request, char** buffer)
                 break;
             }
         }
-        *buffer = realloc(*buffer, fullbufsize + result+1);
-        memcpy(*buffer + fullbufsize, buf, result);
+        buffer = realloc(buffer, fullbufsize + result+1);
+        memcpy(buffer + fullbufsize, buf, result);
         free(buf);
         buf = calloc(512, sizeof(char));
         fullbufsize += result;
     } while(result > 0);
-    *buffer = realloc(*buffer, fullbufsize +1);
-    memset((*buffer) + fullbufsize, 0, 1);
-    //(*buffer)[fullbufsize+1] = '\0';
-    //printf("received from api: %s\n", *buffer);
+    buffer = realloc(buffer, fullbufsize +1);
+    memset(buffer + fullbufsize, 0, 1);
     if(check_for_chunked(buffer))
     {
-        *buffer = strip_chunked(*buffer); // TODO: should probably make use of transfer-encoding: chunked
+        buffer = strip_chunked(buffer); // TODO: should probably make use of transfer-encoding: chunked
     }
 
+    cJSON* root = cJSON_Parse(strstr(buffer, "\r\n\r\n"));
+
     free(buf);
+    free(buffer);
     SSL_shutdown(conn);
     SSL_free(conn);
     CRYPTO_cleanup_all_ex_data();
@@ -232,4 +155,5 @@ void send_twitch_api_request(char* request, char** buffer)
     ERR_remove_state(0);
     EVP_cleanup();
     closesocket(api_sock);
+    return root;
 }

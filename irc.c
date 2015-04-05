@@ -142,7 +142,7 @@ void send_irc_message(SOCKET socket, char* msg, char* username)
     free(msgtosend);
 }
 
-void handle_irc(SOCKET socket, char* msg, int recvlen)
+void handle_irc(SOCKET socket, char* msg, int recvlen, char* token)
 {
     /*
     - fetch one complete line from the buffer
@@ -162,7 +162,7 @@ void handle_irc(SOCKET socket, char* msg, int recvlen)
         line = realloc(line, line_len + 1);
         line[line_len] = '\0';
 
-        process_line(socket, line);
+        process_line(socket, line, token);
 
 
         free(line);

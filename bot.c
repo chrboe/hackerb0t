@@ -1,15 +1,26 @@
 #include "bot.h"
 
 int running = 1;
-char* token = NULL;
-int token_len = 0;
+hackerbot_command** registered_commands = NULL;
+int command_count = 0;
+
 void process_line(SOCKET socket, char* msg)
 {
     // V3:
     //@color=#0000FF;emotes=;subscriber=0;turbo=0;user_type= :bomb_mask!bomb_mask@bomb_mask.tmi.twitch.tv PRIVMSG #bomb_mask :Yo thanks
     //:nickname!username@nickname.tmi.twitch.tv PRIVMSG #channel :message that was sent
 
+    if(strncmp(msg, "PING", 4) == 0)
+    {
+        printf("\n\n\n###########PING###########\n\n\n");
+        int len = strlen("PONG");
+        send_msg(socket, "PONG tmi.twitch.tv", &len);
+        return;
+    }
+
+    /* see if message contains tags */
     char* tags = strtok(msg, " ");
+
     array_t tags_arr;
     int r = parse_tags(tags, &tags_arr);
     char* prefix = strtok(NULL, " ");
@@ -19,185 +30,174 @@ void process_line(SOCKET socket, char* msg)
     //printf("stuff parsed\n");
     if(strcmp(cmd, "PRIVMSG") == 0)
     {
+
         //printf("private message\n");
         char* username = calloc(32, sizeof(char));
         char* channel = strtok(NULL, " ");
         char* bot_command = strtok(NULL, " ");
         sscanf(bot_command, ":%s", bot_command);
+        if(bot_command[0] != '!')
+            goto cleanup;
 
         array_t params;
         init_array(&params, 1);
         char* temp_tok = NULL;
-        while(temp_tok = strtok(NULL, " "))
+        while(temp_tok = strtok(NULL, " \r\n"))
         {
             insert_array(&params, temp_tok);
         }
         int res = sscanf(prefix, "%*[^!]!%[^@]@%*", username);
-        //int res = sscanf(msg, "%*[^ ] PRIVMSG #%[^ ] :%99c%*c[^\r\n]", username, channel, message);
-        //printf("%s, %s, %s", username, channel, message);
-
-        //printf("%s: %s\n", username, bot_command);
 
         char* usertype = get_value(&tags_arr, "user_type");
         //printf("usertype: %s\n", usertype);
 
-        if(strcmp(bot_command, "!ping") == 0)
+        for(int i = 0; i < command_count; i++)
         {
-            //printf("sending !ping\n");
-            if(params.used == 0)
-                send_irc_message(socket, "pong", username);
-            else
-                send_irc_message(socket, "!ping doesn't accept any parameters", username);
-        }
-        else if(strcmp(bot_command, "!saymyname") == 0)
-        {
-            //printf("savmyname\n");
-            if(params.used == 0)
-                send_irc_message(socket, username, username);
-            else
-                send_irc_message(socket, "!saymyname doesn't accept any parameters", username);
-        }
-        else if(strcmp(bot_command, "!twitchapi") == 0)
-        {
-            if(strcmp(usertype, "mod") != 0 && strcmp(channel+1, username) != 0)
+            if(strcmp(registered_commands[i]->name, bot_command+1) == 0)
             {
-                send_irc_message(socket, "This command can only be used by mods!", username);
-            }
-            char* request_format = "GET /kraken/streams/hackerc0w HTTP/1.1\r\nConnection: close\r\nHost: api.twitch.tv\r\nAccept: application/vnd.twitchtv.v3+json\r\nAuthorization: OAuth %s\r\n\r\n";
-            int request_format_len = strlen(request_format) -2;
-            char* request = calloc(request_format_len + token_len + 1, sizeof(char));
-            sprintf(request, request_format, token);
-            char* buffer = NULL;
-            send_twitch_api_request(request, &buffer);
-            printf("request done\n");
-            if(!buffer)
-            {
-                printf("no buffer :(\n");
-                send_irc_message(socket, "There was an error while fulfilling your request BibleThump", username);
-            }
-            free(buffer);
-
-            //printf("json: %s\n", json_text);
-            //send_irc_message(socket, buffer, username);
-            free(request);
-        }
-        else if(strcmp(bot_command, "!title") == 0)
-        {
-            char* request_format = "GET /kraken/streams/hackerc0w HTTP/1.1\r\nConnection: close\r\nHost: api.twitch.tv\r\nAccept: application/vnd.twitchtv.v3+json\r\nAuthorization: OAuth %s\r\n\r\n";
-            int request_format_len = strlen(request_format) -2;
-            char* request = calloc(request_format_len + token_len + 1, sizeof(char));
-            sprintf(request, request_format, token);
-            char* buffer = NULL;
-            send_twitch_api_request(request, &buffer);
-            //printf("request done\n");
-            if(!buffer)
-            {
-                send_irc_message(socket, "There was an error while fulfilling your request BibleThump", username);
-            }
-            else
-            {
-                //printf("raw json:\n%s\n", buffer);
-
-                cJSON* root = cJSON_Parse(strstr(buffer, "\r\n\r\n"));
-                char* title = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(root, "stream"), "channel"), "status")->valuestring;
-                //printf("json: %s\n", json_text);
-                send_irc_message(socket, title, username);
-                cJSON_Delete(root);
-                free(request);
-            }
-            free(buffer);
-        }
-        else if(strcmp(bot_command, "!die") == 0)
-        {
-            if(strcmp(usertype, "mod") != 0 && strcmp(channel+1, username) != 0)
-            {
-                send_irc_message(socket, "This command can only be used by mods!", username);
-            }
-            send_irc_message(socket, "Farewell, cruel world BibleThump", username);
-            running = 0;
-        }
-        else if(strcmp(bot_command, "!suggest") == 0)
-        {
-            if(strcmp(usertype, "mod") != 0 && strcmp(channel+1, username) != 0)
-            {
-                send_irc_message(socket, "This command can only be used by mods!", username);
-            }
-            else
-            {
-                if(params.used == 0)
+                char* response = NULL;
+                hackerbot_command_args args = {username, usertype, channel+1, NULL};
+                if(registered_commands[i]->argcount == 0)
                 {
-                    send_irc_message(socket, "Usage: !suggest [suggestion]", username);
+                    response = registered_commands[i]->function(&args);
                 }
                 else
                 {
-                    char* suggest_text = params.array[0];
-                    int msg_len = 0;
-                    for(int i = 1; i< params.used; i++)
-                    {
-                        msg_len = strlen(suggest_text);
-                        char* temp_buf = calloc(msg_len + 1 + strlen(params.array[i]) + 1, sizeof(char));
-                        memcpy(temp_buf, suggest_text, msg_len);
-                        memcpy(temp_buf + msg_len, " ", 1);
-                        memcpy(temp_buf + msg_len + 1, params.array[i], strlen(params.array[i]) + 1);
-
-                        free(suggest_text);
-                        suggest_text = calloc(msg_len + 1 + strlen(params.array[i]) + 1, sizeof(char));
-                        memcpy(suggest_text, temp_buf, msg_len + 1 + strlen(params.array[i]) + 1);
-                        free(temp_buf);
-                    }
-                    /*
-                    int suggest_text_len = strlen(suggest_text);
-                    suggest_text = realloc(suggest_text, suggest_text_len + 1);
-                    suggest_text[suggest_text_len+1] = '\0';
-                    suggest_text[suggest_text_len] = '\n';
+                    if(params.used < registered_commands[i]->argcount)
+                        response = registered_commands[i]->usage;
+                    /* 
+                        if the user supplies too many arguments, we will just merge all the 
+                        "unnecessarry" ones into one string to make the last argument 
                     */
-                    //printf("%s suggested %s", username, suggest_text);
+                    else if(params.used > registered_commands[i]->argcount)
+                    {
+                        /* ...-1 is perfectly fine because we never hit this code path if argcount == 0 */
+                        char* merged = strdup(params.array[registered_commands[i]->argcount-1]);
+                        int msg_len = 0;
+                        for(int j = registered_commands[i]->argcount; j < params.used; j++)
+                        {
+                            msg_len = strlen(merged);
+                            char* temp_buf = calloc(msg_len + 1 + strlen(params.array[j]) + 1, sizeof(char));
+                            memcpy(temp_buf, merged, msg_len);
+                            memcpy(temp_buf + msg_len, " ", 1);
+                            memcpy(temp_buf + msg_len + 1, params.array[j], strlen(params.array[j]) + 1);
 
-                    FILE* f = fopen("suggestions.txt", "a");
-                    fwrite(suggest_text, sizeof(char), strlen(suggest_text), f);
-                    fclose(f);
-                    send_irc_message(socket, "Your suggestion was successfully added.", username);
-                    free(suggest_text);
+                            free(merged);
+                            merged = calloc(msg_len + 1 + strlen(params.array[j]) + 1, sizeof(char));
+                            memcpy(merged, temp_buf, msg_len + 1 + strlen(params.array[j]) + 1);
+                            free(temp_buf);
+                        }
 
+                        int used = params.used;
+                        for(int j = registered_commands[i]->argcount; j < used; j++)
+                            remove_from_array(&params);
+
+                        params.array[registered_commands[i]->argcount-1] = merged;
+
+                        args.params = &params;
+                        response = registered_commands[i]->function(&args);
+                        free(merged);
+                    }
+                    else
+                    {
+                        args.params = &params;
+                        response = registered_commands[i]->function(&args);
+                    }
                 }
+                if(!response)
+                    response = "There was an error while processing your request BibleThump";
+
+                send_irc_message(socket, response, username);
+                goto cleanup;
             }
         }
+
+        send_irc_message(socket, "I don't know that command", username);
+
+        goto cleanup;
+
+        if(strcmp(bot_command, "!spotify") == 0)
+        {
+            if(params.used == 0)
+            {
+            }
+            if(strcmp(params.array[0], "search") == 0)
+            {
+                //send_spotify_api_request("/v1/search?q=can%27t+touch+this&type=track", spotify_token);
+                send_irc_message(socket, "This command isn't implemented yet BibleThump", username);
+                goto cleanup;
+            }
+            else if(strcmp(params.array[0], "add") == 0)
+            {
+                send_irc_message(socket, "This command isn't implemented yet BibleThump", username);
+                goto cleanup;
+            }
+
+            send_usage:
+                send_irc_message(socket, "Usage: !spotify [search|add]", username);
+                goto cleanup;
+
+        }
+        else if(strcmp(bot_command, "!playlist") == 0)
+        {
+            send_irc_message(socket, "https://open.spotify.com/user/hackercow/playlist/5XPzaJ9Djfm47soHJ52CSQ", username);
+        }
+        else if(strcmp(bot_command,"!botsnack") == 0)
+        {
+            send_irc_message(socket, "Mmmmm, delicious Kreygasm", username);
+        }
+        else
+        {
+            send_irc_message(socket, "I don't know that command", username);
+        }
+        cleanup:
         free_array(&tags_arr);
         free_array(&params);
         free(username);
     }
-    else if(strcmp(cmd, "PING") == 0)
-    {
-        //printf("ping\n");
-        int len = strlen("PONG");
-        send_msg(socket, "PONG tmi.twitch.tv", &len);
-    }
 }
 
-
-void start_bot(SOCKET connect_socket, char* token)
+void hackerbot_register_command(hackerbot_command* command)
 {
-    token_len = strlen(token);
+    if(!registered_commands)
+    {
+        registered_commands = calloc(1, sizeof(hackerbot_command**));
+    }
+    registered_commands[command_count] = calloc(1, sizeof(*command));
+    //memcpy(registered_commands + command_count, command, sizeof(hackerbot_command*));
+    *registered_commands[command_count] = *command;
+    command_count++;
+}
+
+void hackerbot_start_bot(SOCKET connect_socket, char* p_twitch_token, char* p_spotify_token)
+{
+    twitch_token = p_twitch_token;
+    spotify_token = p_spotify_token;
+
+    int token_len = strlen(twitch_token);
     char* pass_buf_format = "PASS oauth:%s\r\nNICK HackerB0t\r\nJOIN #hackerc0w\r\nCAP REQ :twitch.tv/tags\r\n";
     int formatlen = strlen(pass_buf_format)-2;
 
     int buflen = formatlen + token_len;
     char* pass_buf = calloc(buflen+1, sizeof(char));
-    sprintf(pass_buf, pass_buf_format, token);
+    sprintf(pass_buf, pass_buf_format, twitch_token);
 
     send_msg(connect_socket, pass_buf, &buflen);
 
     int recvlen = 0;
 
     printf("Joined channel and ready.\n");
+    printf("%d commands registered.\n", command_count);
 
     while(running)
     {
         char* recv_buf = recv_irc_msg(connect_socket, &recvlen);
         //printf("%s\n\n\n", recv_buf);
         if(!recv_buf) break;
-        handle_irc(connect_socket, recv_buf, recvlen);
+        handle_irc(connect_socket, recv_buf, recvlen, twitch_token);
         free(recv_buf);
     }
     free(pass_buf);
+    for(int i = 0; i < command_count; i++) free(registered_commands[i]);
+    free(registered_commands);
 }

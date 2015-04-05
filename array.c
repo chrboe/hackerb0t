@@ -15,10 +15,18 @@ void insert_array(array_t *a, char* element)
         a->array = realloc(a->array, a->size * sizeof(char*));
     }
     int element_size = strlen(element);
-    free(a->array[a->used]);
+    //free(a->array[a->used]);
     a->array[a->used] = malloc(element_size +1);
     memcpy(a->array[a->used], element, (element_size +1));
     a->used++;
+}
+
+void remove_from_array(array_t* a)
+{
+    free(a->array[a->used-1]);
+    a->array[a->used-1] = NULL;
+    a->used--;
+    a->size--;
 }
 
 void free_array(array_t *a)

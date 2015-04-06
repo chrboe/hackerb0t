@@ -39,11 +39,11 @@ clean:
 
 before:
 ifdef SYSTEMROOT
-	mkdir -p $(OUTDIR)
-	mkdir -p $(OBJDIR)
-else
 	-@ if not exists "$(OUTDIR)" ( mkdir $(OUTDIR) )
 	-@ if not exists "$(OBJDIR)" ( mkdir $(OBJDIR) )
+else
+	mkdir -p $(OUTDIR)
+	mkdir -p $(OBJDIR)
 endif
 
 chatbot: before out after

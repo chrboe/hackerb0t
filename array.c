@@ -31,6 +31,7 @@ void remove_from_array(array_t* a)
 
 void free_array(array_t *a)
 {
+    if(a == NULL) return;
     for(int i = 0; i < a->used; i++)
         free(a->array[i]);
     free(a->array);

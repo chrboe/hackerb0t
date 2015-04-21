@@ -131,15 +131,37 @@ int parse_tags(char* tags, array_t* arr)
 
 }
 
-void send_irc_message(SOCKET socket, char* msg, char* username)
+void send_irc_message(SOCKET socket, char* msg, char* username, char* channel)
 {
-    char* wrapper = ":hackerb0t!hackerb0t@hackerb0t.tmi.twitch.tv PRIVMSG #hackerc0w :[@%s] %s\r\n";
-    int wrapper_length = strlen(wrapper) -2; // -2 because %s
-    int sendlen = wrapper_length + strlen(msg) + strlen(username);
-    char* msgtosend = calloc(sendlen, sizeof(char));
-    sprintf(msgtosend, wrapper, username, msg);
-    send_msg(socket, msgtosend, &sendlen);
-    free(msgtosend);
+    char* wrapper = NULL;
+    if(username)
+    {
+        wrapper = ":hackerb0t!hackerb0t@hackerb0t.tmi.twitch.tv PRIVMSG #%s :[%s] %s\r\n";
+        int wrapper_length = strlen(wrapper) -6; // -6 because 3 %s
+        int sendlen = wrapper_length + strlen(msg) + strlen(username) + strlen(channel);
+        char* msgtosend = calloc(sendlen, sizeof(char));
+        sprintf(msgtosend, wrapper, channel, username, msg);
+        send_msg(socket, msgtosend, &sendlen);
+        free(msgtosend);
+    }
+    else
+    {
+        wrapper = ":hackerb0t!hackerb0t@hackerb0t.tmi.twitch.tv PRIVMSG #%s :%s\r\n";
+        int wrapper_length = strlen(wrapper) -4; // -4 because 2 %s
+        int sendlen = wrapper_length + strlen(msg) + strlen(channel);
+        char* msgtosend = calloc(sendlen, sizeof(char));
+        sprintf(msgtosend, wrapper, channel, msg);
+        send_msg(socket, msgtosend, &sendlen);
+        free(msgtosend);
+    }
+
+    //char* wrapper = "PRIVMSG #hackerc0w :[@%s] %s\r\n";
+}
+
+void send_raw_irc_message(SOCKET socket, char* command)
+{
+    int sendlen = strlen(command);
+    send_msg(socket, command, &sendlen);
 }
 
 void handle_irc(SOCKET socket, char* msg, int recvlen, char* token)

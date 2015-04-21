@@ -19,6 +19,7 @@ char* recv_irc_msg(SOCKET s, int* received)
     *received = res;
     //printf("%s\n", recvbuf);
 
+    printf("received %s\n", recvbuf);
     return recvbuf;
 
 }
@@ -34,12 +35,7 @@ char* recv_msg(SOCKET s)
     {
         printf("receiving...\n");
         if(start == 0)
-        {
-            /* Under certain conditions this will not work.
-            * If the \r\n\r\n part is splitted into two messages
-            * it will fail to detect the beginning of HTML content
-            */
-            content = strstr(buf, "\r\n\r\n");
+        {            content = strstr(buf, "\r\n\r\n");
             if(content != NULL)
             {
                 start = 1;
@@ -69,6 +65,7 @@ int send_msg(SOCKET s, char *buf, int *len)
     while(total < *len) {
         //printf("sending %s\n",buf+total);
         n = send(s, buf+total, bytesleft, 0);
+        printf("sent %s\n", buf);
         if (n == SOCKET_ERROR)
         {
             printf("send failed with error: %d\n", WSAGetLastError());

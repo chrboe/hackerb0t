@@ -24,6 +24,7 @@ typedef struct
     char* usertype;
     char* channel;
     array_t* params;
+    SOCKET socket;
 } hackerbot_command_args;
 
 extern int running;

@@ -38,12 +38,6 @@ char* read_token_from_file(char* file)
 
 int main(int argc, char** argv)
 {
-    /*
-    if(strcmp(usertype, "mod") != 0 && strcmp(channel+1, username) != 0)
-    {
-        send_irc_message(socket, "This command can only be used by mods!", username);
-    }
-    */
     WSADATA wsadata;
     int res = WSAStartup(MAKEWORD(2,2), &wsadata);
     if(res != 0)

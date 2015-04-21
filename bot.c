@@ -33,11 +33,14 @@ void process_line(SOCKET socket, char* msg)
 
         //printf("private message\n");
         char* username = calloc(32, sizeof(char));
-        char* channel = strtok(NULL, " ");
+        char* channel = strtok(NULL, " ")+1;
         char* bot_command = strtok(NULL, " ");
         sscanf(bot_command, ":%s", bot_command);
         if(bot_command[0] != '!')
-            goto cleanup;
+        {
+            free(username);
+            return;
+        }
 
         array_t params;
         init_array(&params, 1);
@@ -56,7 +59,7 @@ void process_line(SOCKET socket, char* msg)
             if(strcmp(registered_commands[i]->name, bot_command+1) == 0)
             {
                 char* response = NULL;
-                hackerbot_command_args args = {username, usertype, channel+1, NULL};
+                hackerbot_command_args args = {username, usertype, channel, NULL, socket};
                 if(registered_commands[i]->argcount == 0)
                 {
                     response = registered_commands[i]->function(&args);
@@ -107,49 +110,13 @@ void process_line(SOCKET socket, char* msg)
                 if(!response)
                     response = "There was an error while processing your request BibleThump";
 
-                send_irc_message(socket, response, username);
+                send_irc_message(socket, response, username, args.channel);
                 goto cleanup;
             }
         }
 
-        send_irc_message(socket, "I don't know that command", username);
+        send_irc_message(socket, "I don't know that command", username, channel);
 
-        goto cleanup;
-
-        if(strcmp(bot_command, "!spotify") == 0)
-        {
-            if(params.used == 0)
-            {
-            }
-            if(strcmp(params.array[0], "search") == 0)
-            {
-                //send_spotify_api_request("/v1/search?q=can%27t+touch+this&type=track", spotify_token);
-                send_irc_message(socket, "This command isn't implemented yet BibleThump", username);
-                goto cleanup;
-            }
-            else if(strcmp(params.array[0], "add") == 0)
-            {
-                send_irc_message(socket, "This command isn't implemented yet BibleThump", username);
-                goto cleanup;
-            }
-
-            send_usage:
-                send_irc_message(socket, "Usage: !spotify [search|add]", username);
-                goto cleanup;
-
-        }
-        else if(strcmp(bot_command, "!playlist") == 0)
-        {
-            send_irc_message(socket, "https://open.spotify.com/user/hackercow/playlist/5XPzaJ9Djfm47soHJ52CSQ", username);
-        }
-        else if(strcmp(bot_command,"!botsnack") == 0)
-        {
-            send_irc_message(socket, "Mmmmm, delicious Kreygasm", username);
-        }
-        else
-        {
-            send_irc_message(socket, "I don't know that command", username);
-        }
         cleanup:
         free_array(&tags_arr);
         free_array(&params);
@@ -196,6 +163,7 @@ void hackerbot_start_bot(SOCKET connect_socket, char* p_twitch_token, char* p_sp
         if(!recv_buf) break;
         handle_irc(connect_socket, recv_buf, recvlen, twitch_token);
         free(recv_buf);
+        printf("end of loop\n");
     }
     free(pass_buf);
     for(int i = 0; i < command_count; i++) free(registered_commands[i]);

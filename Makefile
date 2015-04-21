@@ -17,7 +17,7 @@ LDFLAGS =
 OBJDIR = obj
 OUTDIR = bin
 OUT_WIN = chatbot.exe
-OUT_NIX = chatbot.exe
+OUT_NIX = chatbot
 SRC = $(wildcard *.c)
 DEP =
 
@@ -38,8 +38,13 @@ clean:
 	rm -rf $(OUTDIR)
 
 before:
+ifdef SYSTEMROOT
 	-@ if not exists "$(OUTDIR)" ( mkdir $(OUTDIR) )
 	-@ if not exists "$(OBJDIR)" ( mkdir $(OBJDIR) )
+else
+	mkdir -p $(OUTDIR)
+	mkdir -p $(OBJDIR)
+endif
 
 chatbot: before out after
 
